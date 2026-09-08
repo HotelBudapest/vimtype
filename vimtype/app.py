@@ -47,6 +47,10 @@ HELP = [
     ":start  :restart  :settings  :history  :help  :q",
     "",
     "RESULTS",
+    "Results stay open until a command is entered.",
+    "j/k and gg/G scroll previous scores.",
+    ":start begins again; :continue returns to the test setup.",
+    ":q quits. Bare keys, Enter, Tab and Esc cannot leave.",
     "WPM = correct submitted words + correct current prefix",
     "      (including credited spaces), / 5 / elapsed minutes.",
     "Raw = all printable keystrokes / 5 / elapsed minutes.",
@@ -131,16 +135,26 @@ class App:
     def finish(self, now):
         self.insert = False
         self.page = "result"
+        self.selected = 0
+        self.pending_g = False
+        self.command = None
+        self.previous_results = self.storage.history()[::-1]
         self.result = self.test.stats(now)
         row = dict(self.result, date=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                    mode=self.settings.mode,
                    length=self.settings.duration if self.settings.mode == "time" else self.settings.count,
                    punctuation=self.settings.punctuation, numbers=self.settings.numbers,
                    pool=self.test.settings.pool)
+        self.result_record = row
+        # Discard characters already queued when the timer or final word ended.
+        try:
+            curses.flushinp()
+        except curses.error:
+            pass
         try:
             self.storage.save_result(row)
             self.history = self.storage.history()[::-1]
-            self.message = "Saved locally.  i / Tab for another test."
+            self.message = "Saved.  :start next test   :continue setup   :q quit"
         except OSError as error:
             self.message = f"Result not saved: {error.strerror}"
 
@@ -197,14 +211,10 @@ class App:
                 pool = pool if isinstance(pool, str) and pool in POOLS else "legacy"
                 self.put(9 + offset, left, f"{row['date'][:16].replace('T', ' ')}  {pool:<12} {row['wpm']:5.1f} {row['accuracy']:5.1f}% {label}")
         elif self.page == "result":
-            stats = self.result
-            self.put(6, left, "test complete", 2)
-            self.put(8, left, f"{stats['wpm']:g} wpm     {stats['accuracy']:g}% accuracy", 2)
-            self.put(10, left, f"raw {stats['raw']:g}    time {stats['seconds']:g}s    errors {stats['errors']}")
-            self.put(12, left, "i / Tab  next test     H  history     s  settings", 1)
-        mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "NORMAL"
+            self.render_result(left, width, height)
+        mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "RESULT" if self.page == "result" else "NORMAL"
         self.put(height - 3, left, f" {mode} ", 4)
-        self.put(height - 3, left + 10, "Esc abort  Tab restart  Ctrl-w erase word" if self.insert else "i start   s settings   H history   ? help   : command   q quit", 1)
+        self.put(height - 3, left + 10, "Esc abort  Tab restart  Ctrl-w erase word" if self.insert else "j/k scroll   gg/G jump   : command to leave" if self.page == "result" else "i start   s settings   H history   ? help   : command   q quit", 1)
         if self.command is not None:
             visible = self.command[-(width - left - 3):]
             self.put(height - 2, left, ":" + visible)
@@ -216,6 +226,38 @@ class App:
         else:
             self.put(height - 2, left, self.message, 1)
         self.screen.refresh()
+
+    def render_result(self, left, width, height):
+        stats = self.result
+        self.put(5, left, f"TEST COMPLETE   {stats['wpm']:g} wpm   {stats['accuracy']:g}% accuracy", 2)
+        self.put(6, left, f"raw {stats['raw']:g}   time {stats['seconds']:g}s   errors {stats['errors']}")
+        # Compare like-for-like tests; history below still includes all settings.
+        fields = ("mode", "length", "pool", "punctuation", "numbers")
+        matching = [row for row in reversed(self.previous_results)
+                    if all(row.get(key) == self.result_record.get(key) for key in fields)
+                    and math.isfinite(row["wpm"]) and row["wpm"] >= 0]
+        values = [row["wpm"] for row in matching] + [stats["wpm"]]
+        values = values[-min(40, width - left - 12):]
+        self.put(8, left, f"WPM trend / same settings / last {len(values)} tests", 1)
+        ceiling = max(1, math.ceil(max(values)))
+        for level in range(3):
+            label = f"{ceiling:5g}|" if level == 0 else "    0|" if level == 2 else "     |"
+            self.put(9 + level, left, label, 1)
+            for index, value in enumerate(values):
+                point = 2 - round(value / ceiling * 2)
+                char = "*" if level == point else "|" if level > point else " "
+                self.put(9 + level, left + 6 + index, char, 2 if index == len(values) - 1 else 0)
+        self.put(12, left, "      older -> latest (*)   WPM; vertical scale 0 to max", 1)
+        count = len(self.previous_results)
+        self.put(13, left, f"Previous scores / {count}   j/k scroll   gg/G jump", 2)
+        if not count:
+            self.put(15, left, "Your first result! Future scores will appear here.", 1)
+            return
+        self.put(14, left, "date (UTC)        pool           wpm   acc   mode", 1)
+        for offset, row in enumerate(self.previous_results[self.selected:self.selected + height - 18]):
+            pool = row.get("pool")
+            pool = pool if isinstance(pool, str) and pool in POOLS else "legacy"
+            self.put(15 + offset, left, f"{row['date'][:16].replace('T', ' ')}  {pool:<12} {row['wpm']:5.1f} {row['accuracy']:5.1f}% {row['mode']} {row['length']}")
 
     def render_test(self, now, left, width, height):
         test = self.test
@@ -285,6 +327,10 @@ class App:
             self.running = False
         elif name in ("start", "restart") and not args:
             self.start()
+        elif name == "continue" and not args:
+            self.fresh()
+            self.page, self.selected = "test", 0
+            self.message = "Press i to begin.  ? for keys."
         elif name in ("settings", "history", "help") and not args:
             self.page, self.selected = name, 0
         elif name in ("time", "words") and len(args) == 1 and args[0].isdigit() and int(args[0]) in ([15, 30, 60, 120] if name == "time" else [10, 25, 50, 100]):
@@ -339,6 +385,22 @@ class App:
                 self.test.feed(key, now)
             if self.test.finished is not None:
                 self.finish(now)
+            return
+        if self.page == "result":
+            if key == ":":
+                self.command = ""
+            elif key in ("j", "k", "g", "G"):
+                if key == "j":
+                    self.selected = min(max(0, len(self.previous_results) - 1), self.selected + 1)
+                elif key == "k":
+                    self.selected = max(0, self.selected - 1)
+                elif key == "G":
+                    self.selected = max(0, len(self.previous_results) - 1)
+                elif self.pending_g:
+                    self.selected = 0
+                self.pending_g = key == "g" and not self.pending_g
+            else:
+                self.pending_g = False
             return
         if key in ("i", "\n", "\r", curses.KEY_ENTER, "\t"):
             self.start()

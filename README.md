@@ -54,7 +54,9 @@ From a clone elsewhere, change into that clone's directory before running these 
 | Insert | Space | Submit current word |
 | Insert | Backspace / Ctrl-w | Erase character / current word |
 | Insert | Esc | Abort test and return to normal mode |
-| Test or result | Tab | Start a fresh test |
+| Test | Tab | Start a fresh test |
+| Results | `j/k`, `gg/G` | Scroll previous scores |
+| Results | `:start` / `:continue` / `:q` | Next test / setup / quit (Enter to execute) |
 | Any | Ctrl-c | Quit and restore terminal |
 
 In normal mode, `Esc` returns to the test screen. In the command line, it cancels
@@ -62,7 +64,23 @@ the command. Help and history scroll with `j/k` and jump with `gg/G`.
 
 Commands: `:time 15`, `:time 30`, `:time 60`, `:time 120`, `:words 10`,
 `:words 25`, `:words 50`, `:words 100`, `:punctuation on|off`, `:numbers on|off`,
-`:theme serika|nord|mono`, `:start`, `:restart`, `:settings`, `:history`, `:help`, `:q`.
+`:theme serika|nord|mono`, `:start`, `:restart`, `:continue`, `:settings`, `:history`, `:help`, `:q`.
+
+## Results screen
+
+Completed tests open a persistent score screen with WPM, accuracy, raw speed,
+elapsed time, and errors. Queued input is discarded at completion. Ordinary
+typing, `i`, Tab, Enter, Esc, and bare `q` cannot dismiss the score screen.
+Use `:start` to start another test, `:continue` to return to setup, or `:q` to
+quit, followed by Enter. Ctrl-c remains an emergency exit from any screen.
+
+Previous scores appear newest first below the latest result. Scroll with `j/k`
+or jump with `gg/G`. The ASCII graph shows up to 40 recent WPM scores, oldest
+to newest, for the same pool, mode, test length, punctuation, and numbers
+settings as the latest result. Its vertical scale runs from zero to the maximum
+shown; the highlighted final point is your latest test. The list includes all
+previous settings, while legacy results without pool metadata are excluded
+from the graph. History is limited to the latest 500 saved tests.
 
 ## Monkeytype word pools
 

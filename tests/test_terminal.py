@@ -65,7 +65,16 @@ class TerminalTests(unittest.TestCase):
             expect(b"history / 0 tests")
             send(b"?")
             expect(b"GETTING AROUND")
-            send(b"q")
+            send(b"i")
+            expect(b"INSERT")
+            send(b"x " * 10 + b"i\tq\n")
+            expect(b"TEST COMPLETE")
+            expect(b"WPM trend")
+            send(b"i\tq\n:invalid\n")
+            expect(b"Unknown command")
+            self.assertIsNone(process.poll())
+            self.assertEqual(len(json.loads((Path(data) / "history.json").read_text())), 1)
+            send(b":q\n")
             deadline = time.monotonic() + 5
             while process.poll() is None and time.monotonic() < deadline:
                 if select.select([master], [], [], 0.1)[0]:

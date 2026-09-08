@@ -51,7 +51,7 @@ class AppTests(unittest.TestCase):
         self.assertIsNone(app.test.started)
         self.assertEqual(app.test.current, "")
 
-    def test_result_is_saved_and_tab_restarts(self):
+    def test_result_stays_open_until_explicit_command(self):
         app = self.app
         app.execute("words 10")
         app.start()
@@ -60,9 +60,74 @@ class AppTests(unittest.TestCase):
         app.key("i", 1)
         self.assertEqual(app.page, "result")
         self.assertEqual(len(self.storage.history()), 1)
-        app.key("\t", 2)
+        result = app.result
+        for char in "i\t\n\r\x1bqsH?leftover typing":
+            app.key(char, 2)
+            self.assertEqual(app.page, "result")
+            self.assertFalse(app.insert)
+            self.assertTrue(app.running)
+            self.assertIs(app.result, result)
+        for char in ":start\n":
+            app.key(char, 3)
         self.assertTrue(app.insert)
         self.assertIsNone(app.test.started)
+
+    def test_result_history_scroll_graph_and_continue(self):
+        app = self.app
+        row = dict(date="2026-09-08T12:00", mode="time", length=30,
+                   pool="english", punctuation=False, numbers=False,
+                   raw=50, accuracy=99)
+        self.storage.write("history.json", [dict(row, wpm=n) for n in range(1, 13)])
+        app.start()
+        app.test.feed("a", 0)
+        app.test.tick(30)
+        app.finish(30)
+        self.assertEqual(len(app.previous_results), 12)
+        self.assertEqual(app.previous_results[0]["wpm"], 12)
+        app.key("j", 31)
+        self.assertEqual(app.selected, 1)
+        app.key("G", 31)
+        self.assertEqual(app.selected, 11)
+        app.key("g", 31)
+        app.key("g", 31)
+        self.assertEqual(app.selected, 0)
+        app.put = Mock()
+        for height in (20, 24, 40):
+            app.render_result(3, 64, height)
+        text = " ".join(str(call.args[2]) for call in app.put.call_args_list)
+        self.assertIn("last 13 tests", text)
+        self.assertIn("Previous scores / 12", text)
+        for char in ":continue\n":
+            app.key(char, 32)
+        self.assertEqual(app.page, "test")
+        self.assertFalse(app.insert)
+
+    def test_result_graph_filters_settings_and_handles_first_score(self):
+        app = self.app
+        app.start()
+        app.test.feed("x", 0)
+        app.test.tick(30)
+        app.finish(30)
+        app.put = Mock()
+        app.render_result(3, 64, 20)
+        text = " ".join(str(call.args[2]) for call in app.put.call_args_list)
+        self.assertIn("last 1 tests", text)
+        self.assertIn("Your first result", text)
+        app.previous_results = [dict(app.result_record, pool="english_1k", wpm=100)]
+        app.put.reset_mock()
+        app.render_result(3, 64, 20)
+        text = " ".join(str(call.args[2]) for call in app.put.call_args_list)
+        self.assertIn("last 1 tests", text)
+        for char in ":oops\n":
+            app.key(char, 31)
+        self.assertEqual(app.page, "result")
+        for char in ":q\x1b":
+            app.key(char, 31)
+        self.assertEqual(app.page, "result")
+        self.assertTrue(app.running)
+        for char in ":q\n":
+            app.key(char, 31)
+        self.assertFalse(app.running)
 
     def test_invalid_command_does_not_change_settings(self):
         before = asdict(self.app.settings)
