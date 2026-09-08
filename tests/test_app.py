@@ -159,6 +159,35 @@ class AppTests(unittest.TestCase):
         self.assertEqual(selected_row()[0], 8)
         self.assertEqual(app.score_scroll, 0)
 
+    def test_expanded_graph_navigation_and_selection(self):
+        app = self.app
+        app.execute("graph")
+        self.assertEqual(app.page, "test")
+        row = dict(date="2026-09-08T12:00", mode="time", length=30,
+                   pool="english", punctuation=False, numbers=False,
+                   raw=60, accuracy=99, seconds=30, errors=1)
+        self.storage.write("history.json", [dict(row, wpm=n) for n in (40, 50, 60)])
+        app.execute("graph")
+        self.assertEqual(app.page, "graph")
+        app.put = Mock()
+        app.render_result(3, 80, 24)
+        self.assertTrue(any(len(call.args) > 3 and call.args[3] == 4 for call in app.put.call_args_list))
+        app.key("j", 0)
+        self.assertEqual(app.selected, 1)
+        app.put.reset_mock()
+        app.render_result(3, 80, 24)
+        self.assertTrue(any("Selected #1: 40 WPM" in str(call.args[2]) for call in app.put.call_args_list))
+        app.execute("graph ascii")
+        self.assertFalse(app.graph_braille)
+        app.execute("results")
+        self.assertEqual(app.page, "result")
+        app.execute("graph braille")
+        self.assertTrue(app.graph_braille)
+        for key in "i\tq\n\x1b":
+            app.key(key, 0)
+        self.assertEqual(app.page, "graph")
+        self.assertTrue(app.running)
+
     def test_invalid_command_does_not_change_settings(self):
         before = asdict(self.app.settings)
         self.app.execute("time 900")

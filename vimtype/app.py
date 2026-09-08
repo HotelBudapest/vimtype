@@ -5,6 +5,7 @@ import curses
 from dataclasses import replace
 from datetime import datetime, timezone
 import math
+import locale
 import sys
 import time
 
@@ -12,6 +13,7 @@ from . import __version__
 from .core import TypingTest, generate_words
 from .storage import Storage
 from .pools import POOLS
+from .chart import line_chart
 
 
 HELP = [
@@ -47,6 +49,8 @@ HELP = [
     ":start  :restart  :settings  :history  :help  :q",
     "",
     "RESULTS",
+    ":graph opens a larger chart; :results returns.",
+    ":graph ascii / :graph braille changes graph style.",
     "Results stay open until a command is entered.",
     "j/k and gg/G scroll previous scores.",
     ":start begins again; :continue returns to the test setup.",
@@ -88,6 +92,12 @@ class App:
         self.command = None
         self.selected = 0
         self.score_scroll = 0
+        self.graph_braille = True
+        try:
+            "\u28ff".encode(sys.stdout.encoding or "ascii")
+            "\u28ff".encode(locale.nl_langinfo(locale.CODESET))
+        except UnicodeEncodeError:
+            self.graph_braille = False
         self.pending_g = False
         self.message = "Press i to begin.  ? for keys."
         self.running = True
@@ -169,9 +179,9 @@ class App:
         height, width = self.screen.getmaxyx()
         if 0 <= y < height and 0 <= x < width - 1:
             # Keep persisted text from introducing terminal controls.
-            safe = "".join(c if c.isprintable() and c.isascii() else "?" for c in str(text))
+            safe = "".join(c if c.isprintable() and (c.isascii() or 0x2800 <= ord(c) <= 0x28ff) else "?" for c in str(text))
             try:
-                self.screen.addnstr(y, x, safe, width - x - 1, self.styles[style])
+                self.screen.addstr(y, x, safe[:width - x - 1], self.styles[style])
             except curses.error:
                 pass
 
@@ -191,9 +201,14 @@ class App:
         left = max(3, (width - 90) // 2)
         self.put(1, left, "vimtype", 2)
         self.put(1, left + 10, "typing, at the speed of thought", 1)
-        length = f"{self.settings.duration}s" if self.settings.mode == "time" else f"{self.settings.count} words"
-        self.put(3, left, f"{self.settings.mode} / {length}   punctuation {'on' if self.settings.punctuation else 'off'}   numbers {'on' if self.settings.numbers else 'off'}", 1)
-        self.put(4, left, f"pool / {self.settings.pool}", 1)
+        record = self.result_record if self.page in ("result", "graph") else {}
+        mode = record.get("mode", self.settings.mode)
+        count = record.get("length", self.settings.duration if mode == "time" else self.settings.count)
+        length = f"{count}s" if mode == "time" else f"{count} words"
+        punctuation = record.get("punctuation", self.settings.punctuation)
+        numbers = record.get("numbers", self.settings.numbers)
+        self.put(3, left, f"{mode} / {length}   punctuation {'on' if punctuation else 'off'}   numbers {'on' if numbers else 'off'}", 1)
+        self.put(4, left, f"pool / {record.get('pool', self.settings.pool)}", 1)
         if self.page == "test":
             self.render_test(now, left, width, height)
         elif self.page == "settings":
@@ -210,11 +225,11 @@ class App:
         elif self.page == "history":
             self.put(5, left, f"history / {len(self.history)} tests   j k to scroll", 2)
             self.render_scores(self.history, 7, left, width, height)
-        elif self.page == "result":
+        elif self.page in ("result", "graph"):
             self.render_result(left, width, height)
-        mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "RESULT" if self.page == "result" else "NORMAL"
+        mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "RESULT" if self.page in ("result", "graph") else "NORMAL"
         self.put(height - 3, left, f" {mode} ", 4)
-        self.put(height - 3, left + 10, "Esc abort  Tab restart  Ctrl-w erase word" if self.insert else "j/k scroll   gg/G jump   : command to leave" if self.page == "result" else "i start   s settings   H history   ? help   :q quit", 1)
+        self.put(height - 3, left + 10, "Esc abort  Tab restart  Ctrl-w erase word" if self.insert else "j/k select   :graph expand   :results back" if self.page in ("result", "graph") else "i start   s settings   H history   ? help   :q quit", 1)
         if self.command is not None:
             visible = self.command[-(width - left - 3):]
             self.put(height - 2, left, ":" + visible)
@@ -230,7 +245,7 @@ class App:
     def render_result(self, left, width, height):
         stats = self.result
         self.put(5, left, f"TEST COMPLETE   {stats['wpm']:g} wpm   {stats['accuracy']:g}% accuracy", 2)
-        self.put(6, left, f"raw {stats['raw']:g}   time {stats['seconds']:g}s   errors {stats['errors']}")
+        self.put(6, left, f"raw {stats['raw']:g}   time {stats.get('seconds', 0):g}s   errors {stats.get('errors', 0)}")
         # Compare like-for-like tests; history below still includes all settings.
         fields = ("mode", "length", "pool", "punctuation", "numbers")
         matching = [row for row in reversed(self.previous_results)
@@ -238,28 +253,39 @@ class App:
                     and math.isfinite(row["wpm"]) and row["wpm"] >= 0]
         values = [row["wpm"] for row in matching] + [stats["wpm"]]
         total = len(values)
-        values = values[-min(40, width - left - 12):]
         self.put(7, left, f"WPM trend / same settings / last {len(values)} tests", 2)
         change = f"{values[-1] - values[-2]:+.1f} vs prev" if len(values) > 1 else "first test"
         self.put(8, left, f"Avg {sum(values)/len(values):.1f}   Best {max(values):.1f}   {change}", 1)
-        plot_height = max(2, min(8, height - 19))
+        plot_height = max(2, height - 15) if self.page == "graph" else max(2, min(8, height - 19))
         plot_width = min(78, width - left - 9)
-        step = max(5, math.ceil(max(values) / (plot_height - 1) / 5) * 5)
-        ceiling = step * (plot_height - 1)
-        for level in range(plot_height):
-            self.put(9 + level, left, f"{ceiling - level * step:5g} |" + "." * plot_width, 1)
-        points = [(round(index * (plot_width - 1) / (len(values) - 1)) if len(values) > 1 else plot_width - 1,
-                   (plot_height - 1) * (1 - value / ceiling)) for index, value in enumerate(values)]
-        for (x0, y0), (x1, y1) in zip(points, points[1:]):
-            for x in range(x0 + 1, x1):
-                y = round(y0 + (y1 - y0) * (x - x0) / (x1 - x0))
-                self.put(9 + y, left + 7 + x, "-" if round(y0) == round(y1) else "/" if y1 < y0 else "\\", 0)
-        for index, (x, y) in enumerate(points):
-            self.put(9 + round(y), left + 7 + x, "*" if index == len(points) - 1 else "o", 2)
+        rows, points, lower, upper = line_chart(values, plot_width, plot_height, self.graph_braille)
+        ticks = {0, plot_height // 2, plot_height - 1}
+        for y, row in enumerate(rows):
+            if y in ticks:
+                value = upper - y / (plot_height - 1) * (upper - lower)
+                self.put(9 + y, left, f"{value:5.0f} |" + " " * plot_width, 1)
+                for x in range(0, plot_width, 5):
+                    if row[x] == " ":
+                        self.put(9 + y, left + 7 + x, ".", 1)
+            else:
+                self.put(9 + y, left, "      |", 1)
+            for x, char in enumerate(row):
+                if char != " ":
+                    self.put(9 + y, left + 7 + x, char, 2)
+        selected = self.previous_results[min(self.selected, len(self.previous_results) - 1)] if self.previous_results else None
+        selected_index = next((i for i, row in enumerate(matching) if row is selected), None)
+        if selected_index is not None:
+            x, y = points[selected_index]
+            self.put(9 + y, left + 7 + x, rows[y][x], 4)
         axis_row = 9 + plot_height
-        self.put(axis_row, left + 7, f"#{total - len(values) + 1} older", 1)
-        latest = f"latest #{total} (*)"
+        self.put(axis_row, left + 7, "#1 older", 1)
+        latest = f"#{total} latest: {values[-1]:g} WPM"
         self.put(axis_row, left + 7 + plot_width - len(latest), latest, 2)
+        label = f"Selected #{selected_index + 1}: {values[selected_index]:g} WPM" if selected_index is not None else "Selected score uses different settings" if selected else "Complete another test to see a trend"
+        self.put(axis_row + 1, left, label, 1)
+        if self.page == "graph":
+            self.put(axis_row + 2, left, "j/k selects previous scores   :results returns", 1)
+            return
         count = len(self.previous_results)
         self.put(axis_row + 2, left, f"Previous scores / {count}   j/k select   gg/G jump", 2)
         if not count:
@@ -360,6 +386,18 @@ class App:
             self.message = "Press i to begin.  ? for keys."
         elif name in ("settings", "history", "help") and not args:
             self.page, self.selected = name, 0
+        elif name in ("graph", "results") and (not args or name == "graph" and args in (["ascii"], ["braille"])):
+            if self.result is None:
+                history = self.storage.history()[::-1]
+                if not history:
+                    self.message = "Complete a test first to see its graph."
+                    return
+                self.result = self.result_record = history[0]
+                self.previous_results = history[1:]
+                self.selected = 0
+            if args:
+                self.graph_braille = args[0] == "braille"
+            self.page = "graph" if name == "graph" else "result"
         elif name in ("time", "words") and len(args) == 1 and args[0].isdigit() and int(args[0]) in ([15, 30, 60, 120] if name == "time" else [10, 25, 50, 100]):
             self.settings.mode = name
             setattr(self.settings, "duration" if name == "time" else "count", int(args[0]))
@@ -413,7 +451,7 @@ class App:
             if self.test.finished is not None:
                 self.finish(now)
             return
-        if self.page == "result":
+        if self.page in ("result", "graph"):
             if key == ":":
                 self.command = ""
             elif key in ("j", "k", "g", "G"):
@@ -482,6 +520,15 @@ def main(argv=None):
     for key in ("punctuation", "numbers", "theme", "pool"):
         if getattr(args, key) is not None:
             setattr(settings, key, getattr(args, key))
+    # Curses uses the C character locale, which can differ from Python's UTF-8
+    # mode. Prefer a Unicode locale for graph cells, otherwise use ASCII.
+    for candidate in ("", "C.UTF-8", "en_US.UTF-8", "UTF-8"):
+        try:
+            locale.setlocale(locale.LC_CTYPE, candidate)
+            "\u28ff".encode(locale.nl_langinfo(locale.CODESET))
+            break
+        except (locale.Error, UnicodeEncodeError):
+            continue
     try:
         curses.wrapper(lambda screen: App(screen, settings, storage).run())
     except KeyboardInterrupt:

@@ -77,15 +77,23 @@ quit, followed by Enter. Ctrl-c remains an emergency exit from any screen.
 Previous scores appear newest first below the latest result. Move the tinted
 selection row with `j/k`, or jump with `gg/G`. The list scrolls when the selection
 reaches the edge; the same selection works on the history screen.
-The connected ASCII graph shows up to 40 recent WPM scores, oldest
-to newest, for the same pool, mode, test length, punctuation, and numbers
-settings as the latest result. Labeled horizontal grid lines show WPM on a scale
-from zero to a rounded upper bound. The horizontal axis labels older and latest
-test numbers; `o` marks previous results and the highlighted `*` is your latest.
-Average, best, and change from the previous matching test summarize the displayed
-scores. The graph grows taller with the terminal. The list includes all
-previous settings, while legacy results without pool metadata are excluded
-from the graph. History is limited to the latest 500 saved tests.
+The Braille line graph shows available matching WPM scores, oldest to newest,
+for the same pool, mode, length, punctuation, and numbers settings as the result.
+Its labeled WPM scale fits the scores with padding (it need not start at zero).
+Sparse grid marks, average/best/change summaries, and a labeled latest score
+help make the trend readable. Selecting a previous score highlights its graph
+cell and displays its exact WPM; a note explains when its settings do not match.
+Dense histories can place multiple scores in the same terminal cell.
+
+Use `:graph` for an expanded chart and `:results` to return to the score list.
+The expanded chart keeps `j/k` and `gg/G` selection and requires a command to
+leave. You can also open `:graph` after launching the app to inspect the latest
+saved result. Use `:graph ascii` if your font cannot display Braille, and
+`:graph braille` to switch back. This choice lasts for the session. Non-Unicode
+output defaults to ASCII. Graph rendering adds no runtime dependencies.
+
+The list includes all previous settings, while unmatched legacy results are
+excluded from the graph. History is limited to the latest 500 saved tests.
 
 ## Monkeytype word pools
 
