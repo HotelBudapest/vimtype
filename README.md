@@ -49,7 +49,7 @@ From a clone elsewhere, change into that clone's directory before running these 
 | Settings | `h` / `l` | Cycle the selected value |
 | Menus | `gg` / `G` | First / last row |
 | Normal | `:` | Command line |
-| Normal | `q` | Quit |
+| Normal | `:q` then Enter | Quit |
 | Insert | All printable keys | Type literally, including Vim keys |
 | Insert | Space | Submit current word |
 | Insert | Backspace / Ctrl-w | Erase character / current word |
@@ -107,7 +107,7 @@ bundled Monkeytype resources retain [GPL-3.0](vimtype/data/LICENSE.monkeytype).
 ## Behavior and scoring
 
 - Timed tests run for 15, 30, 60, or 120 seconds; word tests have 10, 25, 50, or 100 words.
-- Correct characters are bright, pending text is dim, errors are red and underlined,
+- Correctly typed characters are greyed out, remaining text is bright, errors are red and underlined,
   and the caret is highlighted. Text scrolls as you progress.
 - Space accepts incorrect words. Backspace can return to a submitted word.
   A word test finishes when the last word is correct, or when you submit it with Space.

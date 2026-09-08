@@ -24,7 +24,7 @@ HELP = [
     "H           open local result history",
     "?           show this help",
     ":           open the command line",
-    "q           quit from normal mode",
+    ":q + Enter  quit from normal mode",
     "",
     "WHILE TYPING (INSERT MODE)",
     "All printable keys type literally, including h j k l.",
@@ -110,9 +110,10 @@ class App:
             accent = curses.COLOR_CYAN if self.settings.theme == "nord" else curses.COLOR_YELLOW
             if self.settings.theme == "mono":
                 accent = curses.COLOR_WHITE
-            for pair, color in enumerate([curses.COLOR_WHITE, curses.COLOR_WHITE, accent, curses.COLOR_RED, accent], 1):
+            grey = 245 if curses.COLORS >= 256 else curses.COLOR_WHITE
+            for pair, color in enumerate([curses.COLOR_WHITE, grey, accent, curses.COLOR_RED, accent], 1):
                 curses.init_pair(pair, color, background)
-            self.styles = [curses.color_pair(1), curses.color_pair(2) | curses.A_DIM,
+            self.styles = [curses.color_pair(1), curses.color_pair(2) | (0 if curses.COLORS >= 256 else curses.A_DIM),
                            curses.color_pair(3) | curses.A_BOLD, curses.color_pair(4) | curses.A_UNDERLINE,
                            curses.color_pair(5) | curses.A_REVERSE]
 
@@ -214,7 +215,7 @@ class App:
             self.render_result(left, width, height)
         mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "RESULT" if self.page == "result" else "NORMAL"
         self.put(height - 3, left, f" {mode} ", 4)
-        self.put(height - 3, left + 10, "Esc abort  Tab restart  Ctrl-w erase word" if self.insert else "j/k scroll   gg/G jump   : command to leave" if self.page == "result" else "i start   s settings   H history   ? help   : command   q quit", 1)
+        self.put(height - 3, left + 10, "Esc abort  Tab restart  Ctrl-w erase word" if self.insert else "j/k scroll   gg/G jump   : command to leave" if self.page == "result" else "i start   s settings   H history   ? help   :q quit", 1)
         if self.command is not None:
             visible = self.command[-(width - left - 3):]
             self.put(height - 2, left, ":" + visible)
@@ -285,9 +286,9 @@ class App:
             for pos in range(max(len(word), len(entry))):
                 target = word[pos] if pos < len(word) else ""
                 typed = entry[pos] if pos < len(entry) else ""
-                style = 1
+                style = 0
                 if typed:
-                    style = 0 if typed == target else 3
+                    style = 1 if typed == target else 3
                 elif index < test.index:
                     style = 3
                 if index == test.index and pos == len(entry):
@@ -404,8 +405,6 @@ class App:
             return
         if key in ("i", "\n", "\r", curses.KEY_ENTER, "\t"):
             self.start()
-        elif key == "q":
-            self.running = False
         elif key == ":":
             self.command = ""
         elif key in ("s", "H", "?"):
