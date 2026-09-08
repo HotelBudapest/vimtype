@@ -77,6 +77,8 @@ quit, followed by Enter. Ctrl-c remains an emergency exit from any screen.
 Previous scores appear newest first below the latest result. Move the tinted
 selection row with `j/k`, or jump with `gg/G`. The list scrolls when the selection
 reaches the edge; the same selection works on the history screen.
+The `H` history screen shows this list beside an all-tests WPM trend chart; its
+selected row highlights the corresponding chart point when that score is visible.
 The Braille line graph shows available matching WPM scores, oldest to newest,
 for the same pool, mode, length, punctuation, and numbers settings as the result.
 Its labeled WPM scale fits the scores with padding (it need not start at zero).

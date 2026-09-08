@@ -224,7 +224,7 @@ class App:
                 self.put(7 + offset, left, line, 1 if not line or line[0].islower() else 0)
         elif self.page == "history":
             self.put(5, left, f"history / {len(self.history)} tests   j k to scroll", 2)
-            self.render_scores(self.history, 7, left, width, height)
+            self.render_history(left, width, height)
         elif self.page in ("result", "graph"):
             self.render_result(left, width, height)
         mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "RESULT" if self.page in ("result", "graph") else "NORMAL"
@@ -292,6 +292,42 @@ class App:
             self.put(axis_row + 4, left, "Your first result! Future scores will appear here.", 1)
             return
         self.render_scores(self.previous_results, axis_row + 3, left, width, height)
+
+    def render_history(self, left, width, height):
+        """Show the full local history as a chart beside the score list."""
+        rows = [row for row in self.history
+                if isinstance(row.get("wpm"), (int, float))
+                and math.isfinite(row["wpm"]) and row["wpm"] >= 0]
+        list_left = left + max(34, (width - left - 4) // 2)
+        chart_width = max(2, min(42, list_left - left - 8))
+        self.put(7, left, "WPM trend / all saved tests", 2)
+        self.put(8, left, "oldest -> latest   o = score   * = selected", 1)
+        if not rows:
+            self.put(10, left, "Complete a test to see your trend.", 1)
+        else:
+            values = [row["wpm"] for row in reversed(rows)][-max(2, chart_width * 2):]
+            plot_height = max(2, min(8, height - 13))
+            chart_rows, points, lower, upper = line_chart(values, chart_width, plot_height, self.graph_braille)
+            ticks = {0, plot_height // 2, plot_height - 1}
+            for y, chart_row in enumerate(chart_rows):
+                value = upper - y / (plot_height - 1) * (upper - lower)
+                self.put(9 + y, left, f"{value:5.0f} |" if y in ticks else "      |", 1)
+                for x, char in enumerate(chart_row):
+                    if char != " ":
+                        self.put(9 + y, left + 7 + x, char, 2)
+            selected_row = self.history[self.selected] if self.history and self.selected < len(self.history) else None
+            selected_chronological = next((index for index, row in enumerate(reversed(rows))
+                                           if row is selected_row), None)
+            first_visible = max(0, len(rows) - len(values))
+            if selected_chronological is not None and selected_chronological >= first_visible:
+                point_index = selected_chronological - first_visible
+                if point_index < len(points):
+                    x, y = points[point_index]
+                    self.put(9 + y, left + 7 + x, chart_rows[y][x], 4)
+                    self.put(9 + plot_height, left, f"Selected: {selected_row['wpm']:g} WPM", 1)
+            self.put(9 + plot_height, left + 18, f"{len(rows)} tests", 1)
+        self.put(7, list_left, "SCORES / newest first", 2)
+        self.render_scores(self.history, 8, list_left, width, height)
 
     def render_scores(self, rows, top, left, width, height):
         self.put(top, left, "  date (UTC)        pool           wpm   acc   mode", 1)

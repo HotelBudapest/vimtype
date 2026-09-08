@@ -188,6 +188,29 @@ class AppTests(unittest.TestCase):
         self.assertEqual(app.page, "graph")
         self.assertTrue(app.running)
 
+    def test_history_screen_renders_chart_beside_scores(self):
+        app = self.app
+        app.history = [dict(date=f"2026-09-{day:02d}T12:00", pool="english",
+                            wpm=40 + day, raw=50, accuracy=99, mode="time", length=30,
+                            punctuation=False, numbers=False)
+                       for day in range(1, 9)]
+        app.put = Mock()
+        app.render_history(3, 100, 24)
+        text = " ".join(str(call.args[2]) for call in app.put.call_args_list)
+        self.assertIn("WPM trend / all saved tests", text)
+        self.assertIn("SCORES / newest first", text)
+        self.assertIn("Selected: 41 WPM", text)
+        # The same layout supports Braille and the ASCII fallback.
+        self.assertTrue(any(call.args[3] == 2 for call in app.put.call_args_list if len(call.args) > 3))
+
+    def test_empty_history_screen_has_chart_message_and_list(self):
+        app = self.app
+        app.put = Mock()
+        app.render_history(3, 80, 24)
+        text = " ".join(str(call.args[2]) for call in app.put.call_args_list)
+        self.assertIn("Complete a test to see your trend", text)
+        self.assertIn("SCORES / newest first", text)
+
     def test_invalid_command_does_not_change_settings(self):
         before = asdict(self.app.settings)
         self.app.execute("time 900")
