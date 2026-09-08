@@ -87,6 +87,7 @@ class App:
         self.insert = False
         self.command = None
         self.selected = 0
+        self.score_scroll = 0
         self.pending_g = False
         self.message = "Press i to begin.  ? for keys."
         self.running = True
@@ -99,7 +100,7 @@ class App:
         self.colors()
 
     def colors(self):
-        self.styles = [0, curses.A_DIM, curses.A_BOLD, curses.A_BOLD, curses.A_REVERSE]
+        self.styles = [0, curses.A_DIM, curses.A_BOLD, curses.A_BOLD, curses.A_REVERSE, curses.A_REVERSE]
         if curses.has_colors():
             curses.start_color()
             try:
@@ -116,6 +117,11 @@ class App:
             self.styles = [curses.color_pair(1), curses.color_pair(2) | (0 if curses.COLORS >= 256 else curses.A_DIM),
                            curses.color_pair(3) | curses.A_BOLD, curses.color_pair(4) | curses.A_UNDERLINE,
                            curses.color_pair(5) | curses.A_REVERSE]
+            if curses.COLORS >= 256:
+                curses.init_pair(6, curses.COLOR_WHITE, 238)
+                self.styles.append(curses.color_pair(6))
+            else:
+                self.styles.append(curses.A_REVERSE)
 
     def fresh(self):
         self.test = TypingTest(replace(self.settings), generate_words(self.settings))
@@ -203,14 +209,7 @@ class App:
                 self.put(7 + offset, left, line, 1 if not line or line[0].islower() else 0)
         elif self.page == "history":
             self.put(5, left, f"history / {len(self.history)} tests   j k to scroll", 2)
-            self.put(7, left, "date (UTC)        pool          wpm    acc   mode", 1)
-            if not self.history:
-                self.put(9, left, "Complete a test to record your first result.")
-            for offset, row in enumerate(self.history[self.selected:self.selected + height - 12]):
-                label = f"{row['mode']} {row['length']}"
-                pool = row.get("pool")
-                pool = pool if isinstance(pool, str) and pool in POOLS else "legacy"
-                self.put(9 + offset, left, f"{row['date'][:16].replace('T', ' ')}  {pool:<12} {row['wpm']:5.1f} {row['accuracy']:5.1f}% {label}")
+            self.render_scores(self.history, 7, left, width, height)
         elif self.page == "result":
             self.render_result(left, width, height)
         mode = "INSERT" if self.insert else "COMMAND" if self.command is not None else "RESULT" if self.page == "result" else "NORMAL"
@@ -238,27 +237,54 @@ class App:
                     if all(row.get(key) == self.result_record.get(key) for key in fields)
                     and math.isfinite(row["wpm"]) and row["wpm"] >= 0]
         values = [row["wpm"] for row in matching] + [stats["wpm"]]
+        total = len(values)
         values = values[-min(40, width - left - 12):]
-        self.put(8, left, f"WPM trend / same settings / last {len(values)} tests", 1)
-        ceiling = max(1, math.ceil(max(values)))
-        for level in range(3):
-            label = f"{ceiling:5g}|" if level == 0 else "    0|" if level == 2 else "     |"
-            self.put(9 + level, left, label, 1)
-            for index, value in enumerate(values):
-                point = 2 - round(value / ceiling * 2)
-                char = "*" if level == point else "|" if level > point else " "
-                self.put(9 + level, left + 6 + index, char, 2 if index == len(values) - 1 else 0)
-        self.put(12, left, "      older -> latest (*)   WPM; vertical scale 0 to max", 1)
+        self.put(7, left, f"WPM trend / same settings / last {len(values)} tests", 2)
+        change = f"{values[-1] - values[-2]:+.1f} vs prev" if len(values) > 1 else "first test"
+        self.put(8, left, f"Avg {sum(values)/len(values):.1f}   Best {max(values):.1f}   {change}", 1)
+        plot_height = max(2, min(8, height - 19))
+        plot_width = min(78, width - left - 9)
+        step = max(5, math.ceil(max(values) / (plot_height - 1) / 5) * 5)
+        ceiling = step * (plot_height - 1)
+        for level in range(plot_height):
+            self.put(9 + level, left, f"{ceiling - level * step:5g} |" + "." * plot_width, 1)
+        points = [(round(index * (plot_width - 1) / (len(values) - 1)) if len(values) > 1 else plot_width - 1,
+                   (plot_height - 1) * (1 - value / ceiling)) for index, value in enumerate(values)]
+        for (x0, y0), (x1, y1) in zip(points, points[1:]):
+            for x in range(x0 + 1, x1):
+                y = round(y0 + (y1 - y0) * (x - x0) / (x1 - x0))
+                self.put(9 + y, left + 7 + x, "-" if round(y0) == round(y1) else "/" if y1 < y0 else "\\", 0)
+        for index, (x, y) in enumerate(points):
+            self.put(9 + round(y), left + 7 + x, "*" if index == len(points) - 1 else "o", 2)
+        axis_row = 9 + plot_height
+        self.put(axis_row, left + 7, f"#{total - len(values) + 1} older", 1)
+        latest = f"latest #{total} (*)"
+        self.put(axis_row, left + 7 + plot_width - len(latest), latest, 2)
         count = len(self.previous_results)
-        self.put(13, left, f"Previous scores / {count}   j/k scroll   gg/G jump", 2)
+        self.put(axis_row + 2, left, f"Previous scores / {count}   j/k select   gg/G jump", 2)
         if not count:
-            self.put(15, left, "Your first result! Future scores will appear here.", 1)
+            self.put(axis_row + 4, left, "Your first result! Future scores will appear here.", 1)
             return
-        self.put(14, left, "date (UTC)        pool           wpm   acc   mode", 1)
-        for offset, row in enumerate(self.previous_results[self.selected:self.selected + height - 18]):
+        self.render_scores(self.previous_results, axis_row + 3, left, width, height)
+
+    def render_scores(self, rows, top, left, width, height):
+        self.put(top, left, "  date (UTC)        pool           wpm   acc   mode", 1)
+        if not rows:
+            self.put(top + 2, left, "Complete a test to record your first result.", 1)
+            return
+        visible = max(1, height - top - 4)
+        self.selected = min(self.selected, len(rows) - 1)
+        self.score_scroll = min(self.score_scroll, self.selected)
+        self.score_scroll = max(self.score_scroll, self.selected - visible + 1)
+        self.score_scroll = min(self.score_scroll, max(0, len(rows) - visible))
+        for index in range(self.score_scroll, min(len(rows), self.score_scroll + visible)):
+            row = rows[index]
             pool = row.get("pool")
             pool = pool if isinstance(pool, str) and pool in POOLS else "legacy"
-            self.put(15 + offset, left, f"{row['date'][:16].replace('T', ' ')}  {pool:<12} {row['wpm']:5.1f} {row['accuracy']:5.1f}% {row['mode']} {row['length']}")
+            selected = index == self.selected
+            line = f"{'>' if selected else ' '} {row['date'][:16].replace('T', ' ')}  {pool:<12} {row['wpm']:5.1f} {row['accuracy']:5.1f}% {row['mode']} {row['length']}"
+            span = min(90, width - left - 1)
+            self.put(top + 1 + index - self.score_scroll, left, line[:span].ljust(span), 5 if selected else 0)
 
     def render_test(self, now, left, width, height):
         test = self.test

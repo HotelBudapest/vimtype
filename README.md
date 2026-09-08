@@ -74,11 +74,16 @@ typing, `i`, Tab, Enter, Esc, and bare `q` cannot dismiss the score screen.
 Use `:start` to start another test, `:continue` to return to setup, or `:q` to
 quit, followed by Enter. Ctrl-c remains an emergency exit from any screen.
 
-Previous scores appear newest first below the latest result. Scroll with `j/k`
-or jump with `gg/G`. The ASCII graph shows up to 40 recent WPM scores, oldest
+Previous scores appear newest first below the latest result. Move the tinted
+selection row with `j/k`, or jump with `gg/G`. The list scrolls when the selection
+reaches the edge; the same selection works on the history screen.
+The connected ASCII graph shows up to 40 recent WPM scores, oldest
 to newest, for the same pool, mode, test length, punctuation, and numbers
-settings as the latest result. Its vertical scale runs from zero to the maximum
-shown; the highlighted final point is your latest test. The list includes all
+settings as the latest result. Labeled horizontal grid lines show WPM on a scale
+from zero to a rounded upper bound. The horizontal axis labels older and latest
+test numbers; `o` marks previous results and the highlighted `*` is your latest.
+Average, best, and change from the previous matching test summarize the displayed
+scores. The graph grows taller with the terminal. The list includes all
 previous settings, while legacy results without pool metadata are excluded
 from the graph. History is limited to the latest 500 saved tests.
 

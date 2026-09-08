@@ -129,6 +129,36 @@ class AppTests(unittest.TestCase):
             app.key(char, 31)
         self.assertFalse(app.running)
 
+    def test_score_selection_moves_before_scrolling_and_stays_visible(self):
+        app = self.app
+        app.page = "history"
+        app.history = [dict(date=f"2026-09-{day:02d}T12:00", pool="english",
+                            wpm=50, accuracy=99, mode="time", length=30)
+                       for day in range(1, 21)]
+        app.put = Mock()
+
+        def selected_row():
+            app.put.reset_mock()
+            app.render_scores(app.history, 7, 3, 64, 24)
+            highlighted = [call.args for call in app.put.call_args_list
+                           if len(call.args) > 3 and call.args[3] == 5]
+            self.assertEqual(len(highlighted), 1)
+            self.assertTrue(highlighted[0][2].startswith("> "))
+            self.assertLess(highlighted[0][0], 21)
+            return highlighted[0]
+
+        self.assertEqual(selected_row()[0], 8)
+        app.key("j", 0)
+        self.assertEqual(selected_row()[0], 9)
+        self.assertEqual(app.score_scroll, 0)
+        app.key("G", 0)
+        self.assertIn("2026-09-20", selected_row()[2])
+        self.assertGreater(app.score_scroll, 0)
+        app.key("g", 0)
+        app.key("g", 0)
+        self.assertEqual(selected_row()[0], 8)
+        self.assertEqual(app.score_scroll, 0)
+
     def test_invalid_command_does_not_change_settings(self):
         before = asdict(self.app.settings)
         self.app.execute("time 900")
@@ -163,7 +193,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.storage.history(), [])
 
     def test_render_all_pages_and_small_terminal(self):
-        self.app.styles = [0] * 5
+        self.app.styles = [0] * 6
         with patch("curses.curs_set"):
             for size in [(24, 80), (20, 64), (10, 40)]:
                 self.app.screen.getmaxyx.return_value = size
