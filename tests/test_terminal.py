@@ -1,8 +1,10 @@
 """Exercise real curses initialization, key delivery, and terminal restoration."""
 
 import fcntl
+import json
 import os
 import pty
+from pathlib import Path
 import select
 import struct
 import subprocess
@@ -50,6 +52,9 @@ class TerminalTests(unittest.TestCase):
             expect(b"test mode")
             send(b":words 10\n")
             expect(b"Settings updated")
+            send(b":pool english_5k\n")
+            expect(b"Settings updated")
+            self.assertEqual(json.loads((Path(data) / "settings.json").read_text())["pool"], "english_5k")
             send(b"i")
             expect(b"INSERT")
             send(b"hjkl")

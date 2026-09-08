@@ -11,6 +11,7 @@ import time
 from . import __version__
 from .core import TypingTest, generate_words
 from .storage import Storage
+from .pools import POOLS
 
 
 HELP = [
@@ -41,6 +42,8 @@ HELP = [
     ":punctuation on|off   toggle punctuation",
     ":numbers on|off       toggle numbers",
     ":theme serika|nord|mono",
+    ":pool english|english_1k|english_5k|english_10k",
+    "      english_25k|english_450k",
     ":start  :restart  :settings  :history  :help  :q",
     "",
     "RESULTS",
@@ -51,6 +54,13 @@ HELP = [
     "Esc aborts a test; aborted tests are never recorded.",
     "Word tests finish on the final correct word, or Space",
     "to submit an incorrect final word. No pausing the timer.",
+    "",
+    "WORD POOLS / CREDITS",
+    "English pools from Monkeytype contributors (GPL-3.0).",
+    "Bundled unmodified; see data/NOTICE.md and",
+    "data/LICENSE.monkeytype in the vimtype package.",
+    "No warranty. Redistribution subject to the GPL license.",
+    "Pools change vocabulary, not expert/master failure rules.",
 ]
 
 
@@ -62,6 +72,7 @@ class App:
         ("punctuation", "punctuation", [False, True]),
         ("numbers", "numbers", [False, True]),
         ("theme", "theme", ["serika", "nord", "mono"]),
+        ("pool", "word pool", list(POOLS)),
     ]
 
     def __init__(self, screen, settings, storage):
@@ -124,7 +135,8 @@ class App:
         row = dict(self.result, date=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                    mode=self.settings.mode,
                    length=self.settings.duration if self.settings.mode == "time" else self.settings.count,
-                   punctuation=self.settings.punctuation, numbers=self.settings.numbers)
+                   punctuation=self.settings.punctuation, numbers=self.settings.numbers,
+                   pool=self.test.settings.pool)
         try:
             self.storage.save_result(row)
             self.history = self.storage.history()[::-1]
@@ -160,6 +172,7 @@ class App:
         self.put(1, left + 10, "typing, at the speed of thought", 1)
         length = f"{self.settings.duration}s" if self.settings.mode == "time" else f"{self.settings.count} words"
         self.put(3, left, f"{self.settings.mode} / {length}   punctuation {'on' if self.settings.punctuation else 'off'}   numbers {'on' if self.settings.numbers else 'off'}", 1)
+        self.put(4, left, f"pool / {self.settings.pool}", 1)
         if self.page == "test":
             self.render_test(now, left, width, height)
         elif self.page == "settings":
@@ -175,12 +188,14 @@ class App:
                 self.put(7 + offset, left, line, 1 if not line or line[0].islower() else 0)
         elif self.page == "history":
             self.put(5, left, f"history / {len(self.history)} tests   j k to scroll", 2)
-            self.put(7, left, "date (UTC)        mode        wpm     raw    accuracy", 1)
+            self.put(7, left, "date (UTC)        pool          wpm    acc   mode", 1)
             if not self.history:
                 self.put(9, left, "Complete a test to record your first result.")
             for offset, row in enumerate(self.history[self.selected:self.selected + height - 12]):
                 label = f"{row['mode']} {row['length']}"
-                self.put(9 + offset, left, f"{row['date'][:16].replace('T', ' ')}  {label:<10} {row['wpm']:6.1f}  {row['raw']:6.1f}  {row['accuracy']:6.1f}%")
+                pool = row.get("pool")
+                pool = pool if isinstance(pool, str) and pool in POOLS else "legacy"
+                self.put(9 + offset, left, f"{row['date'][:16].replace('T', ' ')}  {pool:<12} {row['wpm']:5.1f} {row['accuracy']:5.1f}% {label}")
         elif self.page == "result":
             stats = self.result
             self.put(6, left, "test complete", 2)
@@ -283,6 +298,9 @@ class App:
             self.settings.theme = args[0]
             self.colors()
             self.configured()
+        elif name == "pool" and len(args) == 1 and args[0] in POOLS:
+            self.settings.pool = args[0]
+            self.configured()
         else:
             self.message = f"Unknown command or value: {command}.  :help lists commands."
 
@@ -363,6 +381,7 @@ def main(argv=None):
     parser.add_argument("--punctuation", action="store_true", default=None)
     parser.add_argument("--numbers", action="store_true", default=None)
     parser.add_argument("--theme", choices=["serika", "nord", "mono"])
+    parser.add_argument("--pool", choices=POOLS, help="Monkeytype English vocabulary pool (default: saved pool or english)")
     parser.add_argument("--data-dir", help="override the local settings/history directory")
     args = parser.parse_args(argv)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -373,7 +392,7 @@ def main(argv=None):
         settings.mode, settings.duration = "time", args.time
     if args.words:
         settings.mode, settings.count = "words", args.words
-    for key in ("punctuation", "numbers", "theme"):
+    for key in ("punctuation", "numbers", "theme", "pool"):
         if getattr(args, key) is not None:
             setattr(settings, key, getattr(args, key))
     try:

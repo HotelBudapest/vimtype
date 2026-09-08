@@ -23,7 +23,7 @@ class AppTests(unittest.TestCase):
             app.key("l", 0)
         self.assertEqual(app.settings.mode, "words")
         app.key("G", 0)
-        self.assertEqual(app.selected, 5)
+        self.assertEqual(app.selected, len(app.options) - 1)
         app.key("g", 0)
         app.key("g", 0)
         self.assertEqual(app.selected, 0)
@@ -69,6 +69,19 @@ class AppTests(unittest.TestCase):
         self.app.execute("time 900")
         self.assertEqual(asdict(self.app.settings), before)
         self.assertIn("Unknown", self.app.message)
+
+    def test_pool_command_persists_and_records_selection(self):
+        app = self.app
+        app.execute("pool english_10k")
+        self.assertEqual(self.storage.settings().pool, "english_10k")
+        app.execute("pool invalid")
+        self.assertEqual(app.settings.pool, "english_10k")
+        app.execute("words 10")
+        app.start()
+        for word in list(app.test.words):
+            for char in word + " ":
+                app.key(char, 1)
+        self.assertEqual(self.storage.history()[0]["pool"], "english_10k")
 
     def test_command_escape_and_backspace(self):
         for char in ":helx\x7fp\x1b":

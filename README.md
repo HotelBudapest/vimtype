@@ -5,7 +5,8 @@ Navigate with motions, enter insert mode to type, and configure tests with `:` c
 No mouse, arrow keys, runtime dependencies, network requests, or account required.
 
 This is an independent implementation, not an official Monkeytype client or a fork.
-No Monkeytype code, branding assets, or word lists are bundled. It does not sync
+Monkeytype's English word lists are bundled with attribution and their GPL license.
+No Monkeytype application code or branding assets are bundled. It does not sync
 with Monkeytype accounts or claim full feature parity.
 
 ## Run
@@ -24,6 +25,7 @@ Press `i` to start typing. The timer begins with your first character.
 python3 -m vimtype --words 25
 python3 -m vimtype --time 60 --punctuation --numbers
 python3 -m vimtype --theme nord
+python3 -m vimtype --pool english_5k --words 25
 ```
 
 Optional installation for a `vimtype` command:
@@ -61,6 +63,28 @@ the command. Help and history scroll with `j/k` and jump with `gg/G`.
 Commands: `:time 15`, `:time 30`, `:time 60`, `:time 120`, `:words 10`,
 `:words 25`, `:words 50`, `:words 100`, `:punctuation on|off`, `:numbers on|off`,
 `:theme serika|nord|mono`, `:start`, `:restart`, `:settings`, `:history`, `:help`, `:q`.
+
+## Monkeytype word pools
+
+Choose `english` (the default 200 words), `english_1k`, `english_5k`,
+`english_10k`, `english_25k`, or `english_450k`. These are the exact upstream
+JSON resources, bundled offline, with original spelling and capitalization.
+Larger pools introduce a broader vocabulary. The names are Monkeytype's nominal
+sizes; 10k currently contains 9,944 entries, 25k has 24,141, and 450k has 450,029.
+
+Use `--pool english_10k` at launch, `:pool english_10k` inside the app, or
+`s`, then `G` to select **word pool**, and `h/l` to change it. The selected pool
+is saved with settings and new results. Older results are labeled `legacy`
+because they used vimtype's original vocabulary.
+
+Pool selection applies to both timed and word-count tests, including new words
+generated during a timed test. Punctuation and numbers still work as modifiers.
+Only the resources match Monkeytype; random selection and scoring remain vimtype's.
+Monkeytype's separate normal/expert/master failure rules are not implemented.
+
+Resource provenance, exact counts, and checksums are in
+[NOTICE.md](vimtype/data/NOTICE.md). Original vimtype code is MIT licensed;
+bundled Monkeytype resources retain [GPL-3.0](vimtype/data/LICENSE.monkeytype).
 
 ## Behavior and scoring
 

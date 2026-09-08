@@ -2,45 +2,7 @@
 
 from dataclasses import dataclass, field
 import random
-
-
-# Original small practice vocabulary; no upstream code or word lists are bundled.
-WORDS = """
-the be to of and a in that have it for with on as you do at this but by
-from they we say her she or an will my one all would there their what so
-up out if about who get which go me when make can like time no just him
-know take people into year your good some could them see other than then
-now look only come its over think also back after use two how our work
-first well way even new want because these give day most us is are was
-been had were has did may more very much still long little own last
-find here thing many world life hand part place case week company system
-program question night point home water room mother area money story fact
-month lot right study book eye job word business issue side kind head house
-service friend power hour game line end member law car city community name
-team minute idea kid body information nothing ago lead social understand
-whether watch together follow around parent stop face anything create public
-already speak others read level allow office spend door health person art
-sure such change morning walk reason low win research girl early food before
-moment air teacher force education foot boy age policy process music market
-sense nation plan college interest course experience effect class control care
-field development role effort rate heart light voice wife police mind price
-report decision son view relationship town road arm difference value building
-action model season society tax director position player record paper space
-ground form event official matter center couple project activity court oil
-picture situation cost industry figure street image phone data cover practice
-piece land product doctor wall patient worker news test movie north love
-support technology step baby computer type attention film tree source red
-nearly organization choose cause hair century evidence window listen culture
-chance brother energy period summer realize hundred available plant likely
-opportunity term short letter condition choice single rule daughter south
-husband floor campaign material population economy call medical hospital church
-close thousand risk current fire future wrong involve anyone increase security
-bank myself certainly west sport board seek subject officer private rest deal
-fight throw top quickly past goal second bed order author fill focus drop
-sound note fine near movement page enter return open write build learn calm
-river ocean mountain forest cloud rain wind sky green blue bright quiet clear
-small large simple fast slow warm cold code terminal normal motion cursor
-""".split()
+from .pools import POOLS, load_pool
 
 
 @dataclass
@@ -51,6 +13,7 @@ class Settings:
     punctuation: bool = False
     numbers: bool = False
     theme: str = "serika"
+    pool: str = "english"
 
     @classmethod
     def from_dict(cls, data):
@@ -64,6 +27,7 @@ class Settings:
             "punctuation": (False, True),
             "numbers": (False, True),
             "theme": ("serika", "nord", "mono"),
+            "pool": POOLS,
         }.items():
             value = data.get(key)
             if type(value) is type(choices[0]) and value in choices:
@@ -74,8 +38,9 @@ class Settings:
 def generate_words(settings, rng=None):
     rng = rng or random.Random()
     words = []
+    pool = load_pool(settings.pool)
     for _ in range(settings.count if settings.mode == "words" else 100):
-        word = rng.choice(WORDS)
+        word = rng.choice(pool)
         if settings.numbers and rng.random() < 0.15:
             word = str(rng.randint(0, 999))
         if settings.punctuation and rng.random() < 0.25:
