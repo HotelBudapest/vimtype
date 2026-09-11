@@ -76,7 +76,7 @@ class TerminalTests(unittest.TestCase):
             expect(b":results returns")
             send(b":results\n")
             expect(b"Previous scores")
-            send(b"i\tq\n:invalid\n")
+            send(b":invalid\n")
             expect(b"Unknown command")
             self.assertIsNone(process.poll())
             self.assertEqual(len(json.loads((Path(data) / "history.json").read_text())), 1)

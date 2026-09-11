@@ -88,3 +88,14 @@ class TypingTests(unittest.TestCase):
         self.assertEqual(len(words), 100)
         self.assertTrue(any(any(c.isdigit() for c in word) for word in words))
         self.assertTrue(any(word.endswith((".", ",", "?", "!")) for word in words))
+
+    def test_adjacent_words_differ_and_capitalization_is_opt_in(self):
+        settings = Settings(mode="words", count=100)
+        words = generate_words(settings, random.Random(8))
+        self.assertTrue(all(word == word.lower() for word in words))
+        self.assertTrue(all(left.lower() != right.lower() for left, right in zip(words, words[1:])))
+        with_caps = generate_words(Settings(mode="words", count=100, capitalization=True, punctuation=True), random.Random(8))
+        self.assertTrue(any(word[0].isupper() for word in with_caps if word[0].isalpha()))
+        punctuated = generate_words(Settings(mode="words", count=100, punctuation=True), random.Random(8))
+        self.assertTrue(all(left.rstrip(".,?!").lower() != right.rstrip(".,?!").lower()
+                            for left, right in zip(punctuated, punctuated[1:])))

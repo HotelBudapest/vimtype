@@ -34,7 +34,7 @@ HELP = [
     "Space       submit a word, including an incorrect word",
     "Backspace   erase; cross back into the previous word",
     "Ctrl-w      erase the current word",
-    "Tab         restart with fresh words",
+    "Tab         restart / return to the test screen",
     "Esc         abort and return to normal mode",
     "Ctrl-c      quit from any screen",
     "",
@@ -43,6 +43,7 @@ HELP = [
     ":words 10|25|50|100    choose a word-count test",
     ":punctuation on|off   toggle punctuation",
     ":numbers on|off       toggle numbers",
+    ":capitalization on|off toggle capital letters",
     ":theme serika|nord|mono",
     ":pool english|english_1k|english_5k|english_10k",
     "      english_25k|english_450k",
@@ -54,7 +55,7 @@ HELP = [
     "Results stay open until a command is entered.",
     "j/k and gg/G scroll previous scores.",
     ":start begins again; :continue returns to the test setup.",
-    ":q quits. Bare keys, Enter, Tab and Esc cannot leave.",
+    ":q quits. Bare keys, Enter, and Esc cannot leave.",
     "WPM = correct submitted words + correct current prefix",
     "      (including credited spaces), / 5 / elapsed minutes.",
     "Raw = all printable keystrokes / 5 / elapsed minutes.",
@@ -79,6 +80,7 @@ class App:
         ("count", "word count", [10, 25, 50, 100]),
         ("punctuation", "punctuation", [False, True]),
         ("numbers", "numbers", [False, True]),
+        ("capitalization", "capitalization", [False, True]),
         ("theme", "theme", ["serika", "nord", "mono"]),
         ("pool", "word pool", list(POOLS)),
     ]
@@ -161,6 +163,7 @@ class App:
                    mode=self.settings.mode,
                    length=self.settings.duration if self.settings.mode == "time" else self.settings.count,
                    punctuation=self.settings.punctuation, numbers=self.settings.numbers,
+                   capitalization=self.settings.capitalization,
                    pool=self.test.settings.pool)
         self.result_record = row
         # Discard characters already queued when the timer or final word ended.
@@ -207,7 +210,8 @@ class App:
         length = f"{count}s" if mode == "time" else f"{count} words"
         punctuation = record.get("punctuation", self.settings.punctuation)
         numbers = record.get("numbers", self.settings.numbers)
-        self.put(3, left, f"{mode} / {length}   punctuation {'on' if punctuation else 'off'}   numbers {'on' if numbers else 'off'}", 1)
+        capitalization = record.get("capitalization", self.settings.capitalization)
+        self.put(3, left, f"{mode} / {length}   punctuation {'on' if punctuation else 'off'}   numbers {'on' if numbers else 'off'}   caps {'on' if capitalization else 'off'}", 1)
         self.put(4, left, f"pool / {record.get('pool', self.settings.pool)}", 1)
         if self.page == "test":
             self.render_test(now, left, width, height)
@@ -247,9 +251,9 @@ class App:
         self.put(5, left, f"TEST COMPLETE   {stats['wpm']:g} wpm   {stats['accuracy']:g}% accuracy", 2)
         self.put(6, left, f"raw {stats['raw']:g}   time {stats.get('seconds', 0):g}s   errors {stats.get('errors', 0)}")
         # Compare like-for-like tests; history below still includes all settings.
-        fields = ("mode", "length", "pool", "punctuation", "numbers")
+        fields = ("mode", "length", "pool", "punctuation", "numbers", "capitalization")
         matching = [row for row in reversed(self.previous_results)
-                    if all(row.get(key) == self.result_record.get(key) for key in fields)
+                    if all(row.get(key, False) == self.result_record.get(key, False) for key in fields)
                     and math.isfinite(row["wpm"]) and row["wpm"] >= 0]
         values = [row["wpm"] for row in matching] + [stats["wpm"]]
         total = len(values)
@@ -438,7 +442,7 @@ class App:
             self.settings.mode = name
             setattr(self.settings, "duration" if name == "time" else "count", int(args[0]))
             self.configured()
-        elif name in ("punctuation", "numbers") and args in (["on"], ["off"]):
+        elif name in ("punctuation", "numbers", "capitalization") and args in (["on"], ["off"]):
             setattr(self.settings, name, args[0] == "on")
             self.configured()
         elif name == "theme" and len(args) == 1 and args[0] in ("serika", "nord", "mono"):
@@ -486,6 +490,14 @@ class App:
                 self.test.feed(key, now)
             if self.test.finished is not None:
                 self.finish(now)
+            return
+        if key == "\t" and self.page != "test":
+            self.fresh()
+            self.page = "test"
+            self.selected = 0
+            self.score_scroll = 0
+            self.pending_g = False
+            self.message = "Returned to test screen.  Press i to begin."
             return
         if self.page in ("result", "graph"):
             if key == ":":
@@ -541,6 +553,7 @@ def main(argv=None):
     group.add_argument("--words", type=int, choices=[10, 25, 50, 100], metavar="COUNT")
     parser.add_argument("--punctuation", action="store_true", default=None)
     parser.add_argument("--numbers", action="store_true", default=None)
+    parser.add_argument("--capitalization", action="store_true", default=None, help="allow capital letters")
     parser.add_argument("--theme", choices=["serika", "nord", "mono"])
     parser.add_argument("--pool", choices=POOLS, help="Monkeytype English vocabulary pool (default: saved pool or english)")
     parser.add_argument("--data-dir", help="override the local settings/history directory")
@@ -553,7 +566,7 @@ def main(argv=None):
         settings.mode, settings.duration = "time", args.time
     if args.words:
         settings.mode, settings.count = "words", args.words
-    for key in ("punctuation", "numbers", "theme", "pool"):
+    for key in ("punctuation", "numbers", "capitalization", "theme", "pool"):
         if getattr(args, key) is not None:
             setattr(settings, key, getattr(args, key))
     # Curses uses the C character locale, which can differ from Python's UTF-8

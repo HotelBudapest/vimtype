@@ -61,16 +61,33 @@ class AppTests(unittest.TestCase):
         self.assertEqual(app.page, "result")
         self.assertEqual(len(self.storage.history()), 1)
         result = app.result
-        for char in "i\t\n\r\x1bqsH?leftover typing":
+        for char in "i\n\r\x1bqsH?leftover typing":
             app.key(char, 2)
             self.assertEqual(app.page, "result")
             self.assertFalse(app.insert)
             self.assertTrue(app.running)
             self.assertIs(app.result, result)
+        app.key("\t", 2)
+        self.assertEqual(app.page, "test")
+        self.assertFalse(app.insert)
         for char in ":start\n":
             app.key(char, 3)
         self.assertTrue(app.insert)
         self.assertIsNone(app.test.started)
+
+    def test_tab_returns_from_every_other_screen_without_starting_insert(self):
+        app = self.app
+        for page in ("settings", "help", "history", "result", "graph"):
+            app.page = page
+            app.insert = False
+            app.result = {"wpm": 20, "accuracy": 95, "raw": 22, "seconds": 30, "errors": 2}
+            app.result_record = dict(mode="time", length=30, pool="english",
+                                     punctuation=False, numbers=False, capitalization=False)
+            app.key("\t", 0)
+            self.assertEqual(app.page, "test")
+            self.assertFalse(app.insert)
+            self.assertIsNone(app.test.started)
+            self.assertEqual(app.selected, 0)
 
     def test_result_history_scroll_graph_and_continue(self):
         app = self.app
@@ -183,9 +200,9 @@ class AppTests(unittest.TestCase):
         self.assertEqual(app.page, "result")
         app.execute("graph braille")
         self.assertTrue(app.graph_braille)
-        for key in "i\tq\n\x1b":
+        for key in "\t":
             app.key(key, 0)
-        self.assertEqual(app.page, "graph")
+        self.assertEqual(app.page, "test")
         self.assertTrue(app.running)
 
     def test_history_screen_renders_chart_beside_scores(self):

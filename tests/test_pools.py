@@ -30,13 +30,13 @@ class PoolTests(unittest.TestCase):
                 pool = set(load_pool(name))
                 settings = Settings(pool=name)
                 words = generate_words(settings, random.Random(4))
-                self.assertTrue(set(words) <= pool)
+                self.assertTrue(set(words) <= pool | {word.lower() for word in pool})
                 test = TypingTest(settings, words[:12])
                 for _ in range(4):
                     for char in test.words[test.index] + " ":
                         test.feed(char, 0)
                 self.assertGreater(len(test.words), 12)
-                self.assertTrue(set(test.words) <= pool)
+                self.assertTrue(set(test.words) <= pool | {word.lower() for word in pool})
 
     def test_settings_upgrade_and_invalid_pool(self):
         self.assertEqual(Settings.from_dict({"mode": "words"}).pool, "english")

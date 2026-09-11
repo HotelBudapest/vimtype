@@ -55,6 +55,7 @@ From a clone elsewhere, change into that clone's directory before running these 
 | Insert | Backspace / Ctrl-w | Erase character / current word |
 | Insert | Esc | Abort test and return to normal mode |
 | Test | Tab | Start a fresh test |
+| Other screens | Tab | Return to the test screen (normal mode) |
 | Results | `j/k`, `gg/G` | Scroll previous scores |
 | Results | `:start` / `:continue` / `:q` | Next test / setup / quit (Enter to execute) |
 | Any | Ctrl-c | Quit and restore terminal |
@@ -64,13 +65,15 @@ the command. Help and history scroll with `j/k` and jump with `gg/G`.
 
 Commands: `:time 15`, `:time 30`, `:time 60`, `:time 120`, `:words 10`,
 `:words 25`, `:words 50`, `:words 100`, `:punctuation on|off`, `:numbers on|off`,
+`:capitalization on|off`,
 `:theme serika|nord|mono`, `:start`, `:restart`, `:continue`, `:settings`, `:history`, `:help`, `:q`.
 
 ## Results screen
 
 Completed tests open a persistent score screen with WPM, accuracy, raw speed,
 elapsed time, and errors. Queued input is discarded at completion. Ordinary
-typing, `i`, Tab, Enter, Esc, and bare `q` cannot dismiss the score screen.
+typing, `i`, Enter, Esc, and bare `q` cannot dismiss the score screen. Tab
+returns to the test screen in normal mode and prepares a fresh test.
 Use `:start` to start another test, `:continue` to return to setup, or `:q` to
 quit, followed by Enter. Ctrl-c remains an emergency exit from any screen.
 
@@ -112,6 +115,10 @@ because they used vimtype's original vocabulary.
 
 Pool selection applies to both timed and word-count tests, including new words
 generated during a timed test. Punctuation and numbers still work as modifiers.
+Adjacent words are always different (case-insensitive), so a pool cannot produce
+the same word twice in a row. Capital letters are disabled by default: upstream's
+`I` becomes `i`, and punctuation does not capitalize words unless capitalization
+is enabled with `--capitalization`, `:capitalization on`, or the settings row.
 Only the resources match Monkeytype; random selection and scoring remain vimtype's.
 Monkeytype's separate normal/expert/master failure rules are not implemented.
 
@@ -133,7 +140,8 @@ bundled Monkeytype resources retain [GPL-3.0](vimtype/data/LICENSE.monkeytype).
   do not erase earlier mistakes. These are this app's scoring rules, not a promise
   of identical Monkeytype scoring.
 - Esc aborts rather than pauses. Aborted tests are not saved. Resizing never pauses
-  an active timer. Tab generates a fresh test.
+  an active timer. Tab generates a fresh test from the test screen and returns to
+  the test screen from every other screen.
 - Settings changed in the UI and the latest 500 completed results are stored in
   `$XDG_DATA_HOME/vimtype`, or `~/.local/share/vimtype` by default. Use `--data-dir PATH`
   for an isolated session. CLI flags override saved defaults for the session;

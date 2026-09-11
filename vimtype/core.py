@@ -12,6 +12,7 @@ class Settings:
     count: int = 25
     punctuation: bool = False
     numbers: bool = False
+    capitalization: bool = False
     theme: str = "serika"
     pool: str = "english"
 
@@ -26,6 +27,7 @@ class Settings:
             "count": (10, 25, 50, 100),
             "punctuation": (False, True),
             "numbers": (False, True),
+            "capitalization": (False, True),
             "theme": ("serika", "nord", "mono"),
             "pool": POOLS,
         }.items():
@@ -35,17 +37,24 @@ class Settings:
         return settings
 
 
-def generate_words(settings, rng=None):
+def generate_words(settings, rng=None, previous=None):
     rng = rng or random.Random()
     words = []
     pool = load_pool(settings.pool)
+    last = (previous or "").rstrip(".,?!").lower()
     for _ in range(settings.count if settings.mode == "words" else 100):
-        word = rng.choice(pool)
+        choices = [candidate for candidate in pool if candidate.lower() != last]
+        word = rng.choice(choices or list(pool))
+        if not settings.capitalization:
+            word = word.lower()
         if settings.numbers and rng.random() < 0.15:
             word = str(rng.randint(0, 999))
         if settings.punctuation and rng.random() < 0.25:
-            word = word.capitalize() + rng.choice([".", ",", "?", "!"])
+            if settings.capitalization:
+                word = word.capitalize()
+            word += rng.choice([".", ",", "?", "!"])
         words.append(word)
+        last = word.rstrip(".,?!").lower()
     return words
 
 
@@ -94,7 +103,7 @@ class TypingTest:
                 return
             self.entries.append("")
             if self.index >= len(self.words) - 10 and self.settings.mode == "time":
-                self.words.extend(generate_words(self.settings))
+                self.words.extend(generate_words(self.settings, previous=self.words[-1]))
         else:
             pos = len(self.current)
             self.correct_keystrokes += pos < len(target) and char == target[pos]
