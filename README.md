@@ -9,35 +9,116 @@ Monkeytype's English word lists are bundled with attribution and their GPL licen
 No Monkeytype application code or branding assets are bundled. It does not sync
 with Monkeytype accounts or claim full feature parity.
 
-## Run
+## Install and run
 
-Requires Python 3.10+ with curses, on macOS or Linux (Windows users can use WSL).
-Use a terminal at least 64 columns by 20 rows.
+vimtype requires Python 3.10 or newer and an interactive terminal with curses.
+It runs on macOS and Linux. Windows users should use WSL2 with an Ubuntu (or
+similar Linux) distribution; native Windows consoles do not provide the curses
+module used by this app. Use a terminal at least 64 columns by 20 rows.
+
+### macOS or Linux: run directly from a clone
+
+Install Git and Python first if they are not already available. Verify both
+commands before cloning:
 
 ```sh
-cd /Users/arianislam/Documents/Projects/type
+git --version
+python3 --version
+```
+
+Python must print `3.10` or a newer version. Then clone this repository, enter
+the clone, and start vimtype:
+
+```sh
+git clone https://github.com/HotelBudapest/vimtype.git
+cd vimtype
 python3 -m vimtype
 ```
 
-Press `i` to start typing. The timer begins with your first character.
+The command must be run from the clone when using this direct method. Press `i`
+to start typing; the timer begins with your first character. Try launch options:
 
 ```sh
 python3 -m vimtype --words 25
 python3 -m vimtype --time 60 --punctuation --numbers
-python3 -m vimtype --theme nord
-python3 -m vimtype --pool english_5k --words 25
+python3 -m vimtype --theme nord --pool english_5k
 ```
 
-Optional installation for a `vimtype` command:
+### macOS or Linux: install a `vimtype` command
+
+This creates a project-local virtual environment, installs the package in
+editable mode, and makes the `vimtype` command available whenever that
+environment is activated. Run these commands from the cloned `vimtype` directory:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/vimtype
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install --editable .
+source .venv/bin/activate
+vimtype
 ```
 
-Alternatively, install globally in an isolated environment with `pipx install .`.
-From a clone elsewhere, change into that clone's directory before running these commands.
+After closing the terminal, activate it again from any directory with the
+absolute path to the clone:
+
+```sh
+source /absolute/path/to/vimtype/.venv/bin/activate
+vimtype --pool english_10k
+```
+
+Replace `/absolute/path/to/vimtype` with the directory created by `git clone`.
+To leave the environment, run `deactivate`. To remove it later, change into
+the clone and run `rm -rf .venv`; this only removes the virtual environment,
+not your source or saved results. The editable install means source changes in
+the clone are used immediately.
+
+If you use pipx, the equivalent isolated install from the clone is:
+
+```sh
+pipx install .
+vimtype
+```
+
+### Windows with WSL2
+
+Open PowerShell as Administrator once and install WSL2 with Ubuntu:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Restart if Windows asks you to, open **Ubuntu** from the Start menu, and run
+the following inside the Linux shell (not PowerShell):
+
+```sh
+sudo apt update
+sudo apt install --yes git python3 python3-venv python3-pip
+git clone https://github.com/HotelBudapest/vimtype.git
+cd vimtype
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install --editable .
+source .venv/bin/activate
+vimtype
+```
+
+Use Windows Terminal to run the Ubuntu profile for the best interactive
+experience. If `wsl --install` is unavailable, enable WSL2 through Microsoft’s
+current Windows instructions, install an Ubuntu distribution, and then use the
+Linux commands above.
+
+### Data and terminal troubleshooting
+
+Settings and the latest 500 completed tests are saved locally in
+`$XDG_DATA_HOME/vimtype`, or `~/.local/share/vimtype` when that variable is
+unset. Use `--data-dir /path/to/test-data` for a separate history. No account,
+network connection, or runtime package is needed after installation.
+
+If vimtype says it needs an interactive terminal, run it directly in a terminal
+window rather than piping or redirecting its input. If it reports that the
+terminal is too small, resize to at least 64 columns by 20 rows. If colors or
+Braille graph cells look wrong, use `:graph ascii`; the app also falls back to
+ASCII when the locale cannot encode Unicode.
 
 ## Controls
 
